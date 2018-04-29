@@ -4,36 +4,36 @@
 #include <Wire.h>
 #include <CtrlPanel.h>
 #include <EEPROM.h>
-#include <PID_v1.h>
 
 
-//Debug 
+
+//Debug
 #define F_Debug				//Uncomment to enable the "fast debug" use for event
 //#define S_Debug				//Uncomment to enable the schedule debug
 #define TDebug		1000
 long TimeDeb;
 
 //Parameter definition
-#define D_MinT    25  
-#define D_MaxT    450
-#define D_TempGunApp  100
-#define D_AirFlowApp  100   
+#define D_MinT			25
+#define D_MaxT			450
+#define D_TempGunApp	100
+#define D_AirFlowApp	100
 #define	D_AirFlowMin	40
 #define	D_AirFlowMax	100
-#define	D_Min_Pid	0
-#define	D_Max_Pid	250
+#define	D_Min_Pid		0
+#define	D_Max_Pid		250
 #define	D_AutoOffTime	3600
 
 #define   LCD_Update	100
 //#define   PID_Update	100
 
-#define   PidTime	120      //Period 1 sec
-#define   TStop		25
+#define   PidTime		120	//Period 1 sec 60Hz		100	/Period 1S 50Hz
+#define   TStop			25
 
 #define   SumE_Min      -1000
 #define   SumE_Max      1000
-#define   Pid_Out_Min     0
-#define   Pid_Out_Max     10000//1200
+#define   Pid_Out_Min	0
+#define   Pid_Out_Max	2000 ////1200
 
 //EEPROM data storage
 #define   M_Temp	2
@@ -109,7 +109,7 @@ signed long Pid_Res;    //Used by PID
 uint16_t TCNT_timer = 0;  //Calculate PID controller pulse width, used by interrupt
 
 //Temp, Air, status vars
-int LastActTemp =0;
+int LastActTemp = 0;
 int ActTemp = 0;    //Actual gun air temp
 int TempGunApp = 0; //Target temperature for PID temporary variable when weld cycle is not active
 int TempGun = 0;    //Target temperature for PID, at work the air flow with this temp from gun
@@ -129,7 +129,7 @@ int X = 0;
 int Menu = Menu_HOME;
 int MenuDec, MenuUnit;
 int MenuOld = -1;
-bool EditMode, EditPar, SaveConf, SavePar,SetMacEn;
+bool EditMode, EditPar, SaveConf, SavePar, SetMacEn;
 
 uint8_t PortA, IntA;
 /*
@@ -219,7 +219,7 @@ void HandleMCPInterrupt() {
     Pot--;
     TicPot = 0;
   }
-  
+
   if (!bitRead(IntA, 0) && bitRead(PortA, 0)) EncClick = 1;	else EncClick = 0;
   if (!bitRead(IntA, 3) && bitRead(PortA, 3)) StartStop = 1; // P1 = 1;			else P1 = 0;
   if (!bitRead(IntA, 5) && bitRead(PortA, 5)) StartStop = 0 ; //P2 = 1;			else P2 = 0;
@@ -244,17 +244,13 @@ void ZeroCCallBack() {      //High priority interrupt, only minimal operation an
     PhaseCounter = 0;
     DoPid = 1;
   }
-  /*TCNT_timer=63450; // 2ms
-    TCNT_timer=64000; // 4ms
-    TCNT_timer=65000; // 8ms
-    TCNT_timer=63000; // NC
-    TCNT_timer=63200; // 645us
-    TCNT_timer=63100; // 250us
-    TCNT_timer=63080; // 150us
-    TCNT_timer=63060; // 79us
+  /*
+    TCNT_timer=65413; // 500us
+    TCNT_timer=65288; // 1000us
+    TCNT_timer=65038; // 2ms
+    TCNT_timer=64538; // 4ms
+    TCNT_timer=63538; // 8ms
   */
-  //TCNT_timer=63060+Pid_Res;
-
   TCNT1H = TCNT_timer >> 8;
   TCNT1L = TCNT_timer & 0x00FF;
   TIMSK1 |= (1 << TOIE1);
@@ -268,31 +264,30 @@ ISR(TIMER1_OVF_vect) { //timer1 overflow
     TCNT1L = 0xFF - PULSE;
     if (StartStop == 1 && Pid_Res > 10 && AirFlow > D_AirFlowMin && TempGun != 0) { //Check if StartStop var is active > welding active and some controls to vars
       digitalWrite(GATE, HIGH); //turn on TRIAC gate
-	  delayMicroseconds(5);
-	  digitalWrite(GATE, LOW); 
-    }
+     }
   } else {
     digitalWrite(GATE, LOW); //turn off TRIAC gate
     TIMSK1 &= ~(1 << TOIE1);
   }
+
 }
 #if defined S_Debug
 void Debug() {
   //digitalWrite(LedV, !(digitalRead(LedV)));
-  Serial.println("Debug Programma");
-  Serial.print("MenuDec");
-  Serial.println(MenuDec);
-  Serial.print("MenuUnit");
-  Serial.println(MenuUnit );
-  Serial.print("Pot");
-  Serial.println(Pot);
+  // Serial.println("Debug Programma");
+  // Serial.print("MenuDec");
+  // Serial.println(MenuDec);
+  // Serial.print("MenuUnit");
+  // Serial.println(MenuUnit );
+  // Serial.print("Pot");
+  // Serial.println(Pot);
   //Serial.print("Pattern");
-  
-  Serial.print(KP,DEC);
-    Serial.print("\t");
-    Serial.println(KI,DEC);
-    Serial.print("\t");
-    Serial.println(KD,DEC);
+
+  Serial.print(KP, DEC);
+  Serial.print("\t");
+  Serial.println(KI, DEC);
+  Serial.print("\t");
+  Serial.println(KD, DEC);
 }
 #endif
 void ModParMenu() {
@@ -338,7 +333,7 @@ void ModParMenu() {
 void SaveParMenu() {
   switch (Menu) {   //Third: save valid modified parameter on eeprom
     case 1:  TempGunApp = ModVal;  EEPROM.write(M_Temp, TempGunApp);     EEPROM.write(M_Temp1, (TempGunApp >> 8)); break;          //Save long value  to two eeprom memory bytes.
-    case 2:  AirFlowApp= AirFlow = ModVal;	EEPROM.write(M_AirFlow, AirFlowApp);			break;
+    case 2:  AirFlowApp = AirFlow = ModVal;	EEPROM.write(M_AirFlow, AirFlowApp);			break;
     case 11:  KP  = ModVal;		EEPROM.write(M_KP, KP);					break;
     case 12:  KI  = ModVal;		EEPROM.write(M_KI, KI);					break;
     case 13:  KD  = ModVal;		EEPROM.write(M_KD, KD);					break;
@@ -387,37 +382,24 @@ void PID (void)    //Controllo PID
 {
   //if (OpTime & 1) ActTemp = TempC();
   ActTemp = TempC();
-  Int_Res = Dev_Res = 0;
+  //Int_Res = Dev_Res = 0;
   Err += (TempGun - ActTemp);
-  if(Err> Pid_Out_Max/KP) Err= Pid_Out_Max/KP;
-  else if(Err < Pid_Out_Min) Err= Pid_Out_Min;
-  
-  Int_Res+= (KI * Err);
-  if(Int_Res > Pid_Out_Max/KI) Int_Res= Pid_Out_Max/KI;
-  else if(Int_Res < Pid_Out_Min) Int_Res= Pid_Out_Min;
+  if (Err > Pid_Out_Max / KP) Err = Pid_Out_Max / KP;
+  else if (Err < Pid_Out_Min) Err = Pid_Out_Min;
+
+  Int_Res += (KI * Err);
+  if (Int_Res > Pid_Out_Max / KI) Int_Res = Pid_Out_Max / KI;
+  else if (Int_Res < Pid_Out_Min) Int_Res = Pid_Out_Min;
   int Dev_Res = (ActTemp - LastActTemp);
 
   Pid_Res = KP * Err + Int_Res - KD * Dev_Res;
-  if(Pid_Res > Pid_Out_Max) Pid_Res = Pid_Out_Max;
-  else if(Pid_Res < Pid_Out_Min) Pid_Res = Pid_Out_Min;
-  
+  if (Pid_Res > Pid_Out_Max) Pid_Res = Pid_Out_Max;
+  else if (Pid_Res < Pid_Out_Min) Pid_Res = Pid_Out_Min;
+
   LastActTemp = ActTemp;
-  
-    Serial.print(ActTemp);
-    Serial.print("\t");
-    Serial.print(TempGun);
-    // Serial.print("\t");
-    // Serial.print(Pid_Res);
-    // Serial.print("\t");
-	// Serial.print(Err);
-    // Serial.print("\t");
-    // Serial.print(Int_Res);
-    // Serial.print("\t");
-    // Serial.print(Dev_Res);
-    Serial.println("\t"); 
-	//Pid_Res = Pid_Out_Min;
- //TCNT_timer = 63060 + Pid_Res;
- TCNT_timer = 55532 + Pid_Res;
+
+  //TCNT_timer = 63060 + Pid_Res;
+  TCNT_timer = 63400 + Pid_Res;
   LastPIDTime = millis();
 }
 
@@ -519,7 +501,7 @@ void startstop() {            //Handler for start/stop button
       case 1: //01
         //AirFlow = AirFlowApp;
         AirFlow = 100;
-		if (RelayStartTime == 0) {
+        if (RelayStartTime == 0) {
           RelayStartTime = millis() + 2000; //Calculate delay from now and relay activation
         }
         break;
@@ -528,7 +510,7 @@ void startstop() {            //Handler for start/stop button
         TempGun = 0;    //Set TempGun to 0 -> shutdown triac, do not change
         delay(150);
         digitalWrite(EMERG_RELAY, LOW); //Disable power to gun
-		 AirFlow = 100;
+        AirFlow = 100;
         if (ActTemp < 30) { //When weld cicle finish (button set to stop) wait for cold temperature and stop air flow
           AirFlow = 0;
         }
@@ -540,19 +522,19 @@ void startstop() {            //Handler for start/stop button
     digitalWrite(EMERG_RELAY, HIGH);        //Enable power to gun
     TempGun = D_MinT;
     RelayStartTime = 0;
-	AirFlow = AirFlowApp;
+    AirFlow = AirFlowApp;
   }
   if (WeldStatus == 1 && millis() > RelayStartTime && digitalRead(TILTSENSOR) == 1) {
     TempGun = TempGunApp;
-	AirFlow = AirFlowApp;
+    AirFlow = AirFlowApp;
   }
   if (WeldStatus == 2 && ActTemp < 30) {
-    
-	AirFlow = 0;
+
+    AirFlow = 0;
   }
-  
-  
-  
+
+
+
 }
 
 void setup() {
@@ -670,11 +652,9 @@ void setup() {
   //TCCR2B – Timer/Counter2 Control Register B
   //CS22:0: Clock Select -> CS22 Clock quartz/64 by prescaler. Required by 8 bit counter.
   TCCR2B = _BV(CS22);
-
 }
 
 void loop() {
-
   //  if (checkerror()==1) {                  //  Error and emergengy handling function
   //    TempGun=0;
   //    AirFlow=100;
@@ -686,16 +666,18 @@ void loop() {
     PID();
     DoPid = 0;
 #if defined F_Debug
-    // Serial.print(ActTemp);
-    // Serial.print("\t");
-    // Serial.print(TempGun);
+    Serial.print(ActTemp);
+    Serial.print("\t");
+    Serial.print(TempGun);
     // Serial.print("\t");
     // Serial.print(Pid_Res);
+    // Serial.print("\t");
+    // Serial.print(Err);
     // Serial.print("\t");
     // Serial.print(Int_Res);
     // Serial.print("\t");
     // Serial.print(Dev_Res);
-    // Serial.println("\t");
+    Serial.println("\t");
 #endif
   }
   startstop();
@@ -721,12 +703,12 @@ void loop() {
     MenuOld = Menu;
   } else if ( !EditMode && millis() > LcdUpd ) {     //Home Menu special handler for live update var every second
     contr.clear();
-	
+
     contr.print("T:");
     contr.print(ActTemp);
     contr.print("/");
     contr.print(TempGun);
-	contr.setCursor(10, 0);
+    contr.setCursor(10, 0);
     contr.print("A:");
     contr.print(AirFlow);
     contr.print("%");
@@ -744,7 +726,7 @@ void loop() {
       contr.print("o:");
       contr.print(OpTime);
     }
-	LcdUpd = millis() + TimeLcd;
+    LcdUpd = millis() + TimeLcd;
   }
 
   if (EncClick && MenuVoice[MenuDec][MenuUnit][0] == 'n') { //On MenuVoice=Exit goto Menu tilet`
@@ -791,7 +773,7 @@ void loop() {
     EncClick = 0;
     PotDivider = 3;
     Pot = 2;
-	PotOld=0;
+    PotOld = 0;
 #ifdef F_Debug
     Serial.print("Save");
 #endif
@@ -819,46 +801,52 @@ void loop() {
 
     if (EncClick && !SetMacEn && Pot > 1) {
       SaveParMenu();
-      Menu = MenuDec = MenuUnit = 0;
-      EditMode = EditPar = SaveConf = 0;
-      EncClick = 0;
-	}
-    
-	if (EncClick && SetMacEn && Pot > 1) {
-		SetMac();
-		Menu = MenuDec = MenuUnit = 0;
-		SetMacEn=0;
-		SaveConf=0;
-		EncClick=0;
-		EditMode=0;
-	}
-	
-    if (EncClick && Pot < -1) {
-      //SaveParMenu();
-      //Menu = 0;
-      //MenuDec = MenuUnit = 0;
+      //Menu = MenuDec = MenuUnit = 0;
+
+      //EditMode = EditPar = SaveConf = 0;
       EditPar = SavePar = 0;
       EncClick = 0;
-	  SaveConf=0;
-	  InitPar=0;
-	  MenuOld=0;
-	  contr.setCursor(0,1);
-	  for(char i=0;i<=16;i++) contr.print(" ");
+      SaveConf = 0;
+      InitPar = 0;
+      MenuOld = 0;
+      contr.setCursor(0, 1);
+      for (char i = 0; i <= 16; i++) contr.print(" ");
+    }
+
+    if (EncClick && SetMacEn && Pot > 1) {
+      SetMac();
+      Menu = MenuDec = MenuUnit = 0;
+      SetMacEn = 0;
+      SaveConf = 0;
+      EncClick = 0;
+      EditMode = 0;
+    }
+
+    if (EncClick && Pot < -1) {
+      //SaveParMenu();
+      //Menu = MenuDec = MenuUnit = 0;
+      EditPar = SavePar = 0;
+      EncClick = 0;
+      SaveConf = 0;
+      InitPar = 0;
+      MenuOld = 0;
+      contr.setCursor(0, 1);
+      for (char i = 0; i <= 16; i++) contr.print(" ");
     }
   }
 
   if (EncClick && !SaveConf && MenuVoice[MenuDec][MenuUnit][0] == 'a') { //On MenuVoice=Exit goto Menu tilet`
-   SaveConf =1;
-   EncClick=0;
-   PotDivider =3;
-   Pot =2;
-   PotOld=0;
-   SetMacEn=1;
+    SaveConf = 1;
+    EncClick = 0;
+    PotDivider = 3;
+    Pot = 2;
+    PotOld = 0;
+    SetMacEn = 1;
   }
-if (EncClick && !SaveConf && MenuVoice[MenuDec][MenuUnit][0] == 'h') { //On MenuVoice=Exit goto Menu tilet`
-   Menu = MenuDec = MenuUnit = 0;
-      EditMode = EditPar = SaveConf = 0;
-      EncClick = 0;
+  if (EncClick && !SaveConf && MenuVoice[MenuDec][MenuUnit][0] == 'h') { //On MenuVoice=Exit goto Menu tilet`
+    Menu = MenuDec = MenuUnit = 0;
+    EditMode = EditPar = SaveConf = 0;
+    EncClick = 0;
   }
 
 
