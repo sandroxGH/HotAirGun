@@ -9,7 +9,7 @@
 #define PANEL_CFG_ENC
 
 //In the B config th
-#define PANEL_CFG_5Key
+//#define PANEL_CFG_5Key
 
 // if DETECT_DEVICE is enabled, then when constructor's detectDevice != 0
 // device will be detected in the begin() function...
