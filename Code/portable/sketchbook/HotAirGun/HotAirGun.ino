@@ -12,23 +12,30 @@
 //#define S_Debug				//Uncomment to enable the schedule debug
 #define TDebug		1000
 long TimeDeb;
+long TimeStabl;
+bool PidStab;
+
+int Delta;
 
 //Parameter definition
-#define D_MinT			25
-#define D_MaxT			450
-#define D_TempGunApp	100
+#define D_MinT		200
+#define D_MaxT		450
+#define D_KP		2
+#define D_KI		5
+#define D_KD		7
+#define D_TempGunApp	250
 #define D_AirFlowApp	100
 #define	D_AirFlowMin	40
 #define	D_AirFlowMax	100
-#define	D_Min_Pid		0
-#define	D_Max_Pid		250
+#define	D_Min_Pid	0
+#define	D_Max_Pid	250
 #define	D_AutoOffTime	3600
 
 #define   LCD_Update	100
 //#define   PID_Update	100
 
-#define   PidTime		120	//Period 1 sec 60Hz		100	/Period 1S 50Hz
-#define   TStop			25
+#define   PidTime	120	//Period 1 sec 60Hz		100	/Period 1S 50Hz
+#define   TStop		25
 
 #define   SumE_Min      -1000
 #define   SumE_Max      1000
@@ -146,8 +153,8 @@ const char *MenuVoice[Menu_TITLES][10] =
   {"nFastSet", "vAirTemp", "vAirFlow", "hExit"},           //0,1,2..
   {"nParSet", "vKP", "vKI", "vKD", "vMinT", "vMaxT", "hExit"}, //10,11,12..
   {"nMaterials Presets", "aSn", "aheat shrink", "aLDPE", "aPP/Hard PVC/HDPE", "aABS/PC/Soft PVC", "hExit"}, //20..
-  {"nWeldCurve"   , "aTempCurve" , "hExit"},                    //30..
-  {"nFunct"   , "vAutoOff" , "vPPPreset"    , "vDefault" , "hExit"},          //40..
+  {"nWeldCurve", "aTempCurve", "hExit"},                    //30..
+  {"nFunct", "vAutoOff", "aDefault", "hExit"},          //40..
 };
 
 
@@ -352,16 +359,31 @@ void SetMac() {
     case 23:  TempGunApp = 270; AirFlowApp = 100; break;        //Example for predefined temp and air flow for a specific function weld LDPE
     case 24:  TempGunApp = 300; AirFlowApp = 100; break;        //Example for predefined temp and air flow for a specific function weld PP,Hard PVC, Hard PE
     case 25:  TempGunApp = 350; AirFlowApp = 100; break;        //Example for predefined temp and air flow for a specific function weld ABS, PC, Soft PVC
-    case 81:  WeldCycle = 1;  break;         //Set WeldCycle var now at every loop weldCurve routine is checked to the end of temperature weld cycle
-  }
+    case 31:  WeldCycle = 1;  break;         //Set WeldCycle var now at every loop weldCurve routine is checked to the end of temperature weld cycle
+    case 42:  DefVal(); break;
+ }
   InitPar = false;
 }
 
 void weldCurve() {
-  if (CurveInd % 2 == 0) {           //If even element of array set temp
+	Delta=( ActTemp - TempGun);
+if (Delta < 2 && Delta > -2 && !PidStab){
+		if(!TimeStabl) TimeStabl= millis()+5000;
+		
+      }
+else {
+	if (! PidStab) TimeStabl=0;
+     }
+	if(TimeStabl && millis() > TimeStabl & TempGun < 300) {
+		PidStab=1;
+		TempGunApp++;
+		TimeStabl+=500;
+	}
+	
+  /* if (CurveInd % 2 == 0) {           //If even element of array set temp
     TempGun = TempCurve[CurveInd];
   }
-  if (CurveInd % 2 == 0 && ActTemp == TempGun) {  //If temp reached increment index
+  if (CurveInd % 2 == 0 && ActTemp == TempGun && Err <10) {  //If temp reached increment index
     CurveInd++;
     OpTime = TempCurve[CurveInd];
   }
@@ -374,7 +396,7 @@ void weldCurve() {
     WeldCycle = 0;
     Menu = 0;
     //Serial.println("Weld curve end");
-  }
+  } */
 }
 
 
@@ -537,6 +559,27 @@ void startstop() {            //Handler for start/stop button
 
 }
 
+void DefVal(){
+    ModVal = D_TempGunApp;
+    Menu = 1; SaveParMenu();
+    ModVal = D_AirFlowApp;
+    Menu = 2; SaveParMenu();
+    ModVal = D_KP;
+    Menu = 11; SaveParMenu();
+    ModVal = D_KI;
+    Menu = 12; SaveParMenu();
+    ModVal = D_KD;
+    Menu = 13; SaveParMenu();
+    ModVal = D_MinT;
+    Menu = 14; SaveParMenu();
+    ModVal = D_MaxT;
+    Menu = 15; SaveParMenu();
+    ModVal = D_AutoOffTime;
+    Menu = 41; SaveParMenu();
+}
+
+
+
 void setup() {
   //#if defined F_Debug || defined S_Debug
   Serial.begin(2000000);
@@ -549,23 +592,9 @@ void setup() {
   contr.print("Hot Air Gun");
   contr.setCursor(0, 1);
   contr.print("Wait....");
+  contr.buzz(500, 1000);
   if (checkemptyeeprom() == 0) {
-    ModVal = D_TempGunApp;
-    Menu = 31; SaveParMenu();
-    ModVal = D_AirFlowApp;
-    Menu = 32; SaveParMenu();
-    ModVal = KP;
-    Menu = 61; SaveParMenu();
-    ModVal = KI;
-    Menu = 62; SaveParMenu();
-    ModVal = KD;
-    Menu = 63; SaveParMenu();
-    ModVal = D_MinT;
-    Menu = 64; SaveParMenu();
-    ModVal = D_MaxT;
-    Menu = 65; SaveParMenu();
-    ModVal = D_AutoOffTime;
-    Menu = 111; SaveParMenu();
+    DefVal();
 #if defined F_Debug
     Serial.println("EEPROM empty! Saving default values");
 #endif
@@ -652,6 +681,9 @@ void setup() {
   //TCCR2B – Timer/Counter2 Control Register B
   //CS22:0: Clock Select -> CS22 Clock quartz/64 by prescaler. Required by 8 bit counter.
   TCCR2B = _BV(CS22);
+  
+ 
+  WeldCycle = 1;
 }
 
 void loop() {
@@ -669,7 +701,7 @@ void loop() {
     Serial.print(ActTemp);
     Serial.print("\t");
     Serial.print(TempGun);
-    // Serial.print("\t");
+    //Serial.print("\t");
     // Serial.print(Pid_Res);
     // Serial.print("\t");
     // Serial.print(Err);
@@ -677,6 +709,8 @@ void loop() {
     // Serial.print(Int_Res);
     // Serial.print("\t");
     // Serial.print(Dev_Res);
+    //Serial.println("\t");
+	//Serial.print( Delta);
     Serial.println("\t");
 #endif
   }
@@ -811,6 +845,7 @@ void loop() {
       MenuOld = 0;
       contr.setCursor(0, 1);
       for (char i = 0; i <= 16; i++) contr.print(" ");
+      contr.buzz(200, 1500);
     }
 
     if (EncClick && SetMacEn && Pot > 1) {
@@ -820,6 +855,7 @@ void loop() {
       SaveConf = 0;
       EncClick = 0;
       EditMode = 0;
+      contr.buzz(200, 1500);
     }
 
     if (EncClick && Pot < -1) {
@@ -832,6 +868,7 @@ void loop() {
       MenuOld = 0;
       contr.setCursor(0, 1);
       for (char i = 0; i <= 16; i++) contr.print(" ");
+      contr.buzz(500, 200);
     }
   }
 
