@@ -8,8 +8,8 @@
 
 
 //Debug
-#define F_Debug				//Uncomment to enable the "fast debug" use for event
-//#define S_Debug				//Uncomment to enable the schedule debug
+//#define F_Debug				//Uncomment to enable the "fast debug" use for event
+#define S_Debug				//Uncomment to enable the schedule debug
 #define TDebug		1000
 long TimeDeb;
 long TimeStabl;
@@ -29,7 +29,7 @@ int Delta;
 #define	D_AirFlowMax	100
 #define	D_Min_Pid	0
 #define	D_Max_Pid	250
-#define	D_AutoOffTime	3600
+#define	D_AutoOffTime	32000
 
 #define   LCD_Update	100
 //#define   PID_Update	100
@@ -129,6 +129,8 @@ uint8_t WeldStatus;
 
 int X = 0;
 
+uint8_t GG;
+
 //Menu and display vars
 #define Menu_HOME 0
 #define Menu_TITLES 5
@@ -154,7 +156,7 @@ const char *MenuVoice[Menu_TITLES][10] =
   {"nParSet", "vKP", "vKI", "vKD", "vMinT", "vMaxT", "hExit"}, //10,11,12..
   {"nMaterials Presets", "aSn", "aheat shrink", "aLDPE", "aPP/Hard PVC/HDPE", "aABS/PC/Soft PVC", "hExit"}, //20..
   {"nWeldCurve", "aTempCurve", "hExit"},                    //30..
-  {"nFunct", "vAutoOff", "aDefault", "hExit"},          //40..
+  {"nFunct", "vAutoOff", "aDefault Setting", "hExit"},          //40..
 };
 
 
@@ -235,6 +237,7 @@ void HandleMCPInterrupt() {
   LastMillisInt = millis();
   //cleanMCPInterrupts();
   //we set callback for the arduino INT handler.
+  OpTime=0;
   attachInterrupt(ArdMCPInterrupt, MCPintCallBack, FALLING);
 }
 
@@ -280,6 +283,10 @@ ISR(TIMER1_OVF_vect) { //timer1 overflow
 }
 #if defined S_Debug
 void Debug() {
+  GG=~GG;
+
+  contr.WriteLed(Led4, GG);
+
   //digitalWrite(LedV, !(digitalRead(LedV)));
   // Serial.println("Debug Programma");
   // Serial.print("MenuDec");
@@ -300,14 +307,14 @@ void Debug() {
 void ModParMenu() {
   if (!InitPar) {           //First: set Modval with actual value of parameter
     switch (Menu) {
-      case 1:  ModVal = TempGunApp; break;
-      case 2:  ModVal = AirFlowApp; break;
+      case 1:   ModVal = TempGunApp;	break;
+      case 2:   ModVal = AirFlowApp;	break;
       case 11:  ModVal = KP;		break;
       case 12:  ModVal = KI;		break;
       case 13:  ModVal = KD;		break;
       case 14:  ModVal = MinT;		break;
       case 15:  ModVal = MaxT;		break;
-      case 41: ModVal = AutoOffTime; break;
+      case 41:  ModVal = AutoOffTime;	break;
     }
     InitPar = true;
     OldModVal = ModVal + 1;
@@ -317,7 +324,8 @@ void ModParMenu() {
     contr.print(" ==>");
   }
   else {                   //Second: check if value is valid
-    ModVal = ModVal + Pot;
+     if(Menu == 41) ModVal = ModVal+(Pot*100);
+	else ModVal = ModVal + Pot;
     Pot = 0;
     switch (Menu) {
       case 1:  if (ModVal < 30) ModVal = 30;				if (ModVal  > D_MaxT) ModVal = D_MaxT;			break;
@@ -327,6 +335,7 @@ void ModParMenu() {
       case 13:  if (ModVal < D_Min_Pid)  ModVal = D_Min_Pid;		if (ModVal > D_Max_Pid) ModVal = D_Max_Pid;		break;
       case 14:  if (ModVal < 30) ModVal = 30 ;				if (ModVal  > D_MaxT) ModVal = D_MaxT;			break;
       case 15:  if (ModVal < 30) ModVal = 30 ;				if (ModVal  > D_MaxT) ModVal = D_MaxT;			break;
+      case 41:  if (ModVal < -32000) ModVal = -32000;			if (ModVal  > -100) ModVal = -100;			break;
     }
   }
   if (OldModVal != ModVal) {
@@ -359,7 +368,7 @@ void SetMac() {
     case 23:  TempGunApp = 270; AirFlowApp = 100; break;        //Example for predefined temp and air flow for a specific function weld LDPE
     case 24:  TempGunApp = 300; AirFlowApp = 100; break;        //Example for predefined temp and air flow for a specific function weld PP,Hard PVC, Hard PE
     case 25:  TempGunApp = 350; AirFlowApp = 100; break;        //Example for predefined temp and air flow for a specific function weld ABS, PC, Soft PVC
-    case 31:  WeldCycle = 1;  break;         //Set WeldCycle var now at every loop weldCurve routine is checked to the end of temperature weld cycle
+    case 31:  WeldCycle =~ WeldCycle;  break;         //Set WeldCycle var now at every loop weldCurve routine is checked to the end of temperature weld cycle
     case 42:  DefVal(); break;
  }
   InitPar = false;
@@ -873,6 +882,8 @@ void loop() {
   }
 
   if (EncClick && !SaveConf && MenuVoice[MenuDec][MenuUnit][0] == 'a') { //On MenuVoice=Exit goto Menu tilet`
+    contr.setCursor(0,1);
+    contr.print("Are You Sure");
     SaveConf = 1;
     EncClick = 0;
     PotDivider = 3;

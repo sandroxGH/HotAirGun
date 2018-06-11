@@ -48,9 +48,9 @@
 #define M17_BIT_D7 0x0200
 #define M17_BIT_BL 0x0100
 #define M17_BIT_P5 0x0080
-#define M17_BIT_P4 0x0040		//Optional Led5
+#define M17_BIT_P4 0x0040		//Optional Led5 Or Buzzer
 #define M17_BIT_P3 0x0020
-#define M17_BIT_P2 0x0010		//Optional Led4 Or Buzzer
+#define M17_BIT_P2 0x0010		//Optional Led4
 #define M17_BIT_P1 0x0008
 #define M17_BIT_EB 0x0004		//Optional Led3
 #define M17_BIT_EA 0x0002		//Optional Led2
@@ -565,6 +565,19 @@
     Wire.endTransmission();
   }
 
+  void CtrlPanelLib::WriteLed(uint8_t Led, uint8_t value){
+    uint8_t RegValue;
+    Wire.beginTransmission(MCP23017_ADDRESS | _i2cAddr);
+    wiresend(MCP23017_GPIOA);
+    Wire.endTransmission();
+    Wire.requestFrom(MCP23017_ADDRESS | _i2cAddr, 1);
+    RegValue = wirerecv();
+    bitWrite(RegValue, Led, value);
+    Wire.beginTransmission(MCP23017_ADDRESS | _i2cAddr);
+    wiresend(MCP23017_GPIOA);
+    wiresend(RegValue);
+    Wire.endTransmission();
+ }
 
   //cycle the buzzer pin at a certain frequency (hz) for a certain duration (ms)
   //note: a 100Khz TWI/I2C bus on a 16Mhz Arduino will max out at around 1500Hz freq
@@ -587,12 +600,12 @@
       ontime = micros();
       Wire.beginTransmission(MCP23017_ADDRESS | _i2cAddr);
       wiresend(MCP23017_GPIOA);
-      wiresend(currentRegister |= M17_BIT_P2);
+      wiresend(currentRegister |= M17_BIT_P4);
       while (Wire.endTransmission());
       while ((long)(ontime + (cycletime / 2) - micros()) > 0);
       Wire.beginTransmission(MCP23017_ADDRESS | _i2cAddr);
       wiresend(MCP23017_GPIOA);
-      wiresend(currentRegister &= ~M17_BIT_P2);
+      wiresend(currentRegister &= ~M17_BIT_P4);
       while (Wire.endTransmission());
       while ((long)(ontime + cycletime - micros()) > 0);
     }

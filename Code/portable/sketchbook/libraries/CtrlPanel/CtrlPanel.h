@@ -25,6 +25,13 @@
 #define BUTTON_RIGHT 0x02
 #define BUTTON_SELECT 0x01
 
+#define Led1 0
+#define Led2 1
+#define Led3 2
+#define Led4 4
+#define Led5 6
+
+
 // // Encoder button bits (which has only rotary encoder and encoder button)
 // #define ENCODER_C 0x04 // == encoder button
 // #define ENCODER_B 0x02
@@ -151,6 +158,7 @@ class CtrlPanelLib : public Print {
     void setupInterruptPin(uint8_t p, uint8_t mode);
     uint8_t getLastInterruptPin();
     uint8_t getLastInterruptPinValue();
+    void CtrlPanelLib::WriteLed(uint8_t Led, uint8_t value);
     // void setupEncoder(uint8_t EN_A, uint8_t EN_B, uint8_t EN_C);
     // void setIntBtn(uint8_t pin);
     // void setIntCross(uint8_t btn[], uint8_t btnNum );
