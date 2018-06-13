@@ -5,14 +5,10 @@
 #include <CtrlPanel.h>
 #include <EEPROM.h>
 
-
-
 //Debug
-//#define F_Debug				//Uncomment to enable the "fast debug" use for event
+//#define F_Debug			//Uncomment to enable the "fast debug" use for event
 #define S_Debug				//Uncomment to enable the schedule debug
 #define TDebug		1000
-
-
 
 //Parameter definition
 #define D_MinT		200
@@ -26,7 +22,12 @@
 #define	D_AirFlowMax	100
 #define	D_Min_Pid	0
 #define	D_Max_Pid	250
+#define D_Target1   200
+#define D_Time1		20
+#define D_Target2   250
+#define D_Time2		20
 #define	D_AutoOffTime	32000
+
 
 #define   LCD_Update	100
 //#define   PID_Update	100
@@ -51,6 +52,14 @@
 #define   M_MaxT1	10
 #define   M_AutoOffTime	 11
 #define   M_AutoOffTime1 12
+#define   M_Target1    13
+#define   M_Target11  14
+#define   M_Time1     15
+#define   M_Target2    16
+#define   M_Target21  17
+#define   M_Time2     18
+
+
 
 //I2cController vars definition
 CtrlPanelLib contr(0x20); // Connect via i2c, default address #0 (A0-A2 not jumpered)
@@ -123,11 +132,15 @@ boolean StartStop, PrevStartStop;
 uint8_t WeldStatus;
 
 //WeldCycle vars
+//uint8_t CurveInd = 0;     //operation index for TempCurve array
+boolean WeldCycle = 0;    //indicate if weld cycle temp is active
+int Target1, Time1, Target2, Time2;
 long TimeStabl;
 bool PidStab;
 int Delta;
-uint8_t CurveInd = 0;     //operation index for TempCurve array
-boolean WeldCycle = 0;    //indicate if weld cycle temp is active
+
+
+
 
 int X = 0;
 
@@ -153,7 +166,7 @@ const char *MenuVoice[Menu_TITLES][10] =
   {"nFastSet", "vAirTemp", "vAirFlow", "hExit"},           //0,1,2..
   {"nParSet", "vKP", "vKI", "vKD", "vMinT", "vMaxT", "hExit"}, //10,11,12..
   {"nMaterials Presets", "aSn", "aheat shrink", "aLDPE", "aPP/Hard PVC/HDPE", "aABS/PC/Soft PVC", "hExit"}, //20..
-  {"nWeldCurve", "aTempCurve", "hExit"},                    //30..
+  {"nWeldCurve", "aTempCurve", "vTarget1", "vTime1", "vTarget2", "vTime2", "hExit"},                    //30..
   {"nFunct", "vAutoOff", "aDefault Setting", "hExit"},          //40..
 };
 
@@ -293,6 +306,7 @@ void Debug() {
   Serial.println(KD, DEC);
 }
 #endif
+
 void ModParMenu() {
   if (!InitPar) {           //First: set Modval with actual value of parameter
     switch (Menu) {
@@ -303,6 +317,10 @@ void ModParMenu() {
       case 13:  ModVal = KD;		break;
       case 14:  ModVal = MinT;		break;
       case 15:  ModVal = MaxT;		break;
+	  case 32:  ModVal = Target1;	break;
+	  case 33:  ModVal = Time1;		break;
+	  case 34:  ModVal = Target2;	break;
+	  case 35:  ModVal = Time2;		break;	  
       case 41:  ModVal = AutoOffTime;	break;
     }
     InitPar = true;
@@ -324,6 +342,10 @@ void ModParMenu() {
       case 13:  if (ModVal < D_Min_Pid)  ModVal = D_Min_Pid;		if (ModVal > D_Max_Pid) ModVal = D_Max_Pid;		break;
       case 14:  if (ModVal < 30) ModVal = 30 ;				if (ModVal  > D_MaxT) ModVal = D_MaxT;			break;
       case 15:  if (ModVal < 30) ModVal = 30 ;				if (ModVal  > D_MaxT) ModVal = D_MaxT;			break;
+	  case 32:  if (ModVal < 30) ModVal = 30;				if (ModVal  > D_MaxT) ModVal = D_MaxT;			break;
+	  case 33:  if (ModVal < 1) ModVal = 1;				    if (ModVal  > 250) ModVal = 250;			break;
+	  case 34:  if (ModVal < 30) ModVal = 30;				if (ModVal  > D_MaxT) ModVal = D_MaxT;			break;
+	  case 35:  if (ModVal < 1) ModVal = 1;				    if (ModVal  > 250) ModVal = 250;			break;
       case 41:  if (ModVal < -32000) ModVal = -32000;			if (ModVal  > -100) ModVal = -100;			break;
     }
   }
@@ -335,6 +357,7 @@ void ModParMenu() {
     OldModVal = ModVal;
   }
 }
+
 void SaveParMenu() {
   switch (Menu) {   //Third: save valid modified parameter on eeprom
     case 1:  TempGunApp = ModVal;  EEPROM.write(M_Temp, TempGunApp);     EEPROM.write(M_Temp1, (TempGunApp >> 8)); break;          //Save long value  to two eeprom memory bytes.
@@ -344,11 +367,14 @@ void SaveParMenu() {
     case 13:  KD  = ModVal;		EEPROM.write(M_KD, KD);					break;
     case 14:  MinT  = ModVal;		EEPROM.write(M_MinT, MinT);				break;
     case 15:  MaxT  = ModVal;		EEPROM.write(M_MaxT, MaxT); EEPROM.write(M_MaxT1, (MaxT >> 8));		break;
-    case 41:   AutoOffTime = ModVal;	EEPROM.write(M_AutoOffTime, AutoOffTime); EEPROM.write(M_AutoOffTime1, (AutoOffTime >> 8)); break; //Save long value  to two eeprom memory bytes.
+    case 32:  Target1 = ModVal;  EEPROM.write(M_Target1  , Target1);     EEPROM.write(M_Target11 , (Target1 >> 8)); break;
+	case 33:  Time1  = ModVal;		EEPROM.write(M_Time1, Time1);					break;
+	case 34:  Target2 = ModVal;  EEPROM.write(M_Target2  , Target2);     EEPROM.write(M_Target21 , (Target2 >> 8)); break;
+	case 35:  Time2  = ModVal;		EEPROM.write(M_Time2, Time2);					break;
+	case 41:  AutoOffTime = ModVal;	EEPROM.write(M_AutoOffTime, AutoOffTime); EEPROM.write(M_AutoOffTime1, (AutoOffTime >> 8)); break; //Save long value  to two eeprom memory bytes.
   }
   InitPar = false;
 }
-
 
 void SetMac() {
   switch (Menu) {
@@ -375,28 +401,10 @@ void weldCurve() {
     TimeStabl += 500;
   }
 
-  /* if (CurveInd % 2 == 0) {           //If even element of array set temp
-    TempGun = TempCurve[CurveInd];
-    }
-    if (CurveInd % 2 == 0 && ActTemp == TempGun && Err <10) {  //If temp reached increment index
-    CurveInd++;
-    OpTime = TempCurve[CurveInd];
-    }
-    if (ActTemp == TempGun && OpTime <= 0) {
-    //Serial.println("Time reached");
-    CurveInd++;
-    }
-    if (CurveInd >= sizeof(TempCurve)) {
-    CurveInd = 0;
-    WeldCycle = 0;
-    Menu = 0;
-    //Serial.println("Weld curve end");
-    } */
+ 
 }
 
-
-void PID (void)    //Controllo PID
-{
+void PID (void){    //Controllo PID
   //if (OpTime & 1) ActTemp = TempC();
   ActTemp = TempC();
   //Int_Res = Dev_Res = 0;
@@ -420,7 +428,6 @@ void PID (void)    //Controllo PID
   LastPIDTime = millis();
 }
 
-
 byte TC_Read(void) {
   int i;
   byte d = 0;
@@ -436,7 +443,6 @@ byte TC_Read(void) {
   }
   return d;
 }
-
 
 signed int TempC() {
   uint16_t v;
@@ -566,11 +572,17 @@ void DefVal() {
   Menu = 14; SaveParMenu();
   ModVal = D_MaxT;
   Menu = 15; SaveParMenu();
+  ModVal = D_Target1;
+  Menu = 32; SaveParMenu();
+  ModVal = D_Time1;
+  Menu = 33; SaveParMenu();
+  ModVal = D_Target2;
+  Menu = 34; SaveParMenu();
+  ModVal = D_Time2;
+  Menu = 35; SaveParMenu();
   ModVal = D_AutoOffTime;
   Menu = 41; SaveParMenu();
 }
-
-
 
 void setup() {
   //#if defined F_Debug || defined S_Debug
@@ -606,6 +618,13 @@ void setup() {
   MinT = EEPROM.read(M_MinT);
   MaxT = EEPROM.read(M_MaxT1);
   MaxT = (MaxT << 8) + EEPROM.read(M_MaxT);
+  Target1= EEPROM.read(M_Target11);
+  Target1= (Target1 << 8) + EEPROM.read(M_Target1);
+  Time1 = EEPROM.read(M_Time1);
+  Target2= EEPROM.read(M_Target21);
+  Target2= (Target2 << 8) + EEPROM.read(M_Target2);
+  Time2 = EEPROM.read(M_Time2);
+  
   //  AutoOffTime = EEPROM.read(M_AutoOffTime1);
   //  AutoOffTime = (AutoOffTime << 8) + EEPROM.read(M_AutoOffTime);
   //  AutoOffTime * = -1;  //Convert to negative
