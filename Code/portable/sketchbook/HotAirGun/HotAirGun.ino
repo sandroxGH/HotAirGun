@@ -11,11 +11,8 @@
 //#define F_Debug				//Uncomment to enable the "fast debug" use for event
 #define S_Debug				//Uncomment to enable the schedule debug
 #define TDebug		1000
-long TimeDeb;
-long TimeStabl;
-bool PidStab;
 
-int Delta;
+
 
 //Parameter definition
 #define D_MinT		200
@@ -60,15 +57,13 @@ CtrlPanelLib contr(0x20); // Connect via i2c, default address #0 (A0-A2 not jump
 #define POTDIVIDER 	4    // Encoder tick divider for sensibilty regulation
 #define CONTR_NOEVENT	0  // No event detected
 #define CONTR_SCROLL	1    // Encoder movement detected -Z > read Pot value
-#define CONTR_CLICK	2    // Encoder click detected 
-#define CONTR_BTN	3    // Button pressed
 
 uint8_t ControllerEvent = CONTR_NOEVENT; //Store encoder events
-//int clickcount = 0;
 int TicPot = 0;           		//Used for cont of single step of rotary encoder
 int PotDivider = POTDIVIDER;    	//Divider for TicPot for best regulation of sensitivity
 int Pot , PotOld;
 char ActEnc, OldEnc;   			//Diff between encoder positions
+uint8_t PortA, IntA;
 int ModVal, OldModVal;     				//Temporary var to store parameter during set
 boolean InitPar = false;    		//Used by Menus
 boolean EncClick, P1, P2, P3; //P4, P5;
@@ -98,7 +93,6 @@ byte ZeroCIntPin = ZEROCINTPIN; // Interrupts from zero crossing circuit
 byte ArdZeroCInterrupt = 0; // ... and this interrupt vector
 
 volatile boolean AwakenByMCPInterrupt   = false;
-unsigned long LastMillisInt = 0;
 uint8_t PhaseCounter = 0; //increment at every phase zero crossing at 100 (=1 sec)  increment OpTime
 
 //Timing vars
@@ -107,11 +101,12 @@ long	RelayStartTime = 0;  //Relay time start: wait some time after start button 
 int		AutoOffTime;    //Time for auto shutdown in seconds
 int		OpTime = 0;   //operation Timer normally equal to millis(), used for temperature welding curve time calculation, displayed in home Menu
 long	LastPIDTime = 0;  //Last time PID was calculated
+long	TimeDeb;
 
 //PID vars
 char KI, KD, KP;    //Used by PID
 bool DoPid = 0;   //Set to true if it's time to recalculate PID
-long  SumE, Int_Res, Dev_Res, Err, Err1; //Used by PID
+long  SumE, Int_Res, Dev_Res, Err;//Used by PID
 signed long Pid_Res;    //Used by PID
 uint16_t TCNT_timer = 0;  //Calculate PID controller pulse width, used by interrupt
 
@@ -127,6 +122,13 @@ int MinT = 30;
 boolean StartStop, PrevStartStop;
 uint8_t WeldStatus;
 
+//WeldCycle vars
+long TimeStabl;
+bool PidStab;
+int Delta;
+uint8_t CurveInd = 0;     //operation index for TempCurve array
+boolean WeldCycle = 0;    //indicate if weld cycle temp is active
+
 int X = 0;
 
 uint8_t GG;
@@ -140,14 +142,10 @@ int MenuDec, MenuUnit;
 int MenuOld = -1;
 bool EditMode, EditPar, SaveConf, SavePar, SetMacEn;
 
-uint8_t PortA, IntA;
 /*
    First char convention for Menu voice handling:
-   x=empty voice -> skip next level or (for last) home
    v=scroll -> next voice on right or left, click -> next voice down (default)
    h=goto home on click
-   m=modify value, scroll adjust value, click save
-   n=nothing used for home and Menu titles used as spacer
    a=apply and go to home
 */
 const char *MenuVoice[Menu_TITLES][10] =
@@ -158,7 +156,6 @@ const char *MenuVoice[Menu_TITLES][10] =
   {"nWeldCurve", "aTempCurve", "hExit"},                    //30..
   {"nFunct", "vAutoOff", "aDefault Setting", "hExit"},          //40..
 };
-
 
 /*
 
@@ -176,8 +173,6 @@ const char *MenuVoice[Menu_TITLES][10] =
    const uint8_t TempCurve[]={target,time,target,time};
 */
 
-uint8_t CurveInd = 0;     //operation index for TempCurve array
-boolean WeldCycle = 0;    //indicate if weld cycle temp is active
 const uint8_t TempCurve[] = {   //target temp   //time to mantain temp
   150,      6,    //prehot
   155,      4,    //weld temp
@@ -187,7 +182,6 @@ const uint8_t TempCurve[] = {   //target temp   //time to mantain temp
 
 void HandleMCPInterrupt() {
   detachInterrupt(ArdMCPInterrupt);
-  //  if (millis()>LastMillisInt+5) {
   //A    |¯¯|__|¯¯|__|¯
   //B  - __|¯¯|__|¯¯|__  +
   AwakenByMCPInterrupt = false;
@@ -228,16 +222,13 @@ void HandleMCPInterrupt() {
     Pot--;
     TicPot = 0;
   }
-
   if (!bitRead(IntA, 0) && bitRead(PortA, 0)) EncClick = 1;	else EncClick = 0;
   if (!bitRead(IntA, 3) && bitRead(PortA, 3)) StartStop = 1; // P1 = 1;			else P1 = 0;
   if (!bitRead(IntA, 5) && bitRead(PortA, 5)) StartStop = 0 ; //P2 = 1;			else P2 = 0;
   if (!bitRead(IntA, 7) && bitRead(PortA, 7)) P3 = 1;			else P3 = 0;
-
-  LastMillisInt = millis();
   //cleanMCPInterrupts();
   //we set callback for the arduino INT handler.
-  OpTime=0;
+  OpTime = 0;
   attachInterrupt(ArdMCPInterrupt, MCPintCallBack, FALLING);
 }
 
@@ -274,17 +265,16 @@ ISR(TIMER1_OVF_vect) { //timer1 overflow
     TCNT1L = 0xFF - PULSE;
     if (StartStop == 1 && Pid_Res > 10 && AirFlow > D_AirFlowMin && TempGun != 0) { //Check if StartStop var is active > welding active and some controls to vars
       digitalWrite(GATE, HIGH); //turn on TRIAC gate
-     }
+    }
   } else {
     digitalWrite(GATE, LOW); //turn off TRIAC gate
     TIMSK1 &= ~(1 << TOIE1);
   }
-
 }
+
 #if defined S_Debug
 void Debug() {
-  GG=~GG;
-
+  GG = ~GG;
   contr.WriteLed(Led4, GG);
 
   //digitalWrite(LedV, !(digitalRead(LedV)));
@@ -295,7 +285,6 @@ void Debug() {
   // Serial.println(MenuUnit );
   // Serial.print("Pot");
   // Serial.println(Pot);
-  //Serial.print("Pattern");
 
   Serial.print(KP, DEC);
   Serial.print("\t");
@@ -324,8 +313,8 @@ void ModParMenu() {
     contr.print(" ==>");
   }
   else {                   //Second: check if value is valid
-     if(Menu == 41) ModVal = ModVal+(Pot*100);
-	else ModVal = ModVal + Pot;
+    if (Menu == 41) ModVal = ModVal + (Pot * 100);
+    else ModVal = ModVal + Pot;
     Pot = 0;
     switch (Menu) {
       case 1:  if (ModVal < 30) ModVal = 30;				if (ModVal  > D_MaxT) ModVal = D_MaxT;			break;
@@ -368,44 +357,41 @@ void SetMac() {
     case 23:  TempGunApp = 270; AirFlowApp = 100; break;        //Example for predefined temp and air flow for a specific function weld LDPE
     case 24:  TempGunApp = 300; AirFlowApp = 100; break;        //Example for predefined temp and air flow for a specific function weld PP,Hard PVC, Hard PE
     case 25:  TempGunApp = 350; AirFlowApp = 100; break;        //Example for predefined temp and air flow for a specific function weld ABS, PC, Soft PVC
-    case 31:  WeldCycle =~ WeldCycle;  break;         //Set WeldCycle var now at every loop weldCurve routine is checked to the end of temperature weld cycle
+    case 31:  WeldCycle = ~ WeldCycle;  break;        //Set WeldCycle var now at every loop weldCurve routine is checked to the end of temperature weld cycle
     case 42:  DefVal(); break;
- }
+  }
   InitPar = false;
 }
 
 void weldCurve() {
-	Delta=( ActTemp - TempGun);
-if (Delta < 2 && Delta > -2 && !PidStab){
-		if(!TimeStabl) TimeStabl= millis()+5000;
-		
-      }
-else {
-	if (! PidStab) TimeStabl=0;
-     }
-	if(TimeStabl && millis() > TimeStabl & TempGun < 300) {
-		PidStab=1;
-		TempGunApp++;
-		TimeStabl+=500;
-	}
-	
+  Delta = ( ActTemp - TempGun);
+  if (Delta < 2 && Delta > -2 && !PidStab) {
+    if (!TimeStabl) TimeStabl = millis() + 5000;
+  }
+  else if (! PidStab) TimeStabl = 0;
+  if (TimeStabl && millis() > TimeStabl & TempGun < 300) {
+    PidStab = 1;
+    TempGunApp++;
+    TimeStabl += 500;
+  }
+
   /* if (CurveInd % 2 == 0) {           //If even element of array set temp
     TempGun = TempCurve[CurveInd];
-  }
-  if (CurveInd % 2 == 0 && ActTemp == TempGun && Err <10) {  //If temp reached increment index
+    }
+    if (CurveInd % 2 == 0 && ActTemp == TempGun && Err <10) {  //If temp reached increment index
     CurveInd++;
     OpTime = TempCurve[CurveInd];
-  }
-  if (ActTemp == TempGun && OpTime <= 0) {
+    }
+    if (ActTemp == TempGun && OpTime <= 0) {
     //Serial.println("Time reached");
     CurveInd++;
-  }
-  if (CurveInd >= sizeof(TempCurve)) {
+    }
+    if (CurveInd >= sizeof(TempCurve)) {
     CurveInd = 0;
     WeldCycle = 0;
     Menu = 0;
     //Serial.println("Weld curve end");
-  } */
+    } */
 }
 
 
@@ -563,28 +549,25 @@ void startstop() {            //Handler for start/stop button
 
     AirFlow = 0;
   }
-
-
-
 }
 
-void DefVal(){
-    ModVal = D_TempGunApp;
-    Menu = 1; SaveParMenu();
-    ModVal = D_AirFlowApp;
-    Menu = 2; SaveParMenu();
-    ModVal = D_KP;
-    Menu = 11; SaveParMenu();
-    ModVal = D_KI;
-    Menu = 12; SaveParMenu();
-    ModVal = D_KD;
-    Menu = 13; SaveParMenu();
-    ModVal = D_MinT;
-    Menu = 14; SaveParMenu();
-    ModVal = D_MaxT;
-    Menu = 15; SaveParMenu();
-    ModVal = D_AutoOffTime;
-    Menu = 41; SaveParMenu();
+void DefVal() {
+  ModVal = D_TempGunApp;
+  Menu = 1; SaveParMenu();
+  ModVal = D_AirFlowApp;
+  Menu = 2; SaveParMenu();
+  ModVal = D_KP;
+  Menu = 11; SaveParMenu();
+  ModVal = D_KI;
+  Menu = 12; SaveParMenu();
+  ModVal = D_KD;
+  Menu = 13; SaveParMenu();
+  ModVal = D_MinT;
+  Menu = 14; SaveParMenu();
+  ModVal = D_MaxT;
+  Menu = 15; SaveParMenu();
+  ModVal = D_AutoOffTime;
+  Menu = 41; SaveParMenu();
 }
 
 
@@ -664,7 +647,6 @@ void setup() {
   pinMode(SO, INPUT);
   digitalWrite(CS, HIGH);
 
-
   //Set TMR1 related registers, used for Triac driving
   //Useful info at http://forum.arduino.cc/index.php?topic=94100.0
   //TIMSK1 Timer Interrupt Mask Register
@@ -680,7 +662,6 @@ void setup() {
   TIMSK1 &= _BV(OCIE1A);
   //CS11 Clock Select -> CS11 Clock quartz with prescaling 8
   TCCR1B |= (1 << CS11);
-
   //Set TMR2 for PWM at 16 MHz, used for fan PWM control
   //TCCR1A – Timer/Counter1 Control Register A
   //COM2A1: COM2An: Compare Output Mode for Channel A on non-PWM mode (depend of  WGM2[2:0] bit). Clear OC2A on Compare Match in
@@ -690,8 +671,7 @@ void setup() {
   //TCCR2B – Timer/Counter2 Control Register B
   //CS22:0: Clock Select -> CS22 Clock quartz/64 by prescaler. Required by 8 bit counter.
   TCCR2B = _BV(CS22);
-  
- 
+
   WeldCycle = 1;
 }
 
@@ -700,8 +680,10 @@ void loop() {
   //    TempGun=0;
   //    AirFlow=100;
   //    digitalWrite(EMERG_RELAY,LOW);    //Disable power to gun
-  //    Serial.println("Shutdown after error!");
-  //    exit(0);
+  //   #if defined F_Debug
+  //   Serial.println("Shutdown after error!");
+  //   #endif
+  //   exit(0);
   //  }
   if (DoPid) {          //Check if PID recalc is needed(recalc after 1 second)
     PID();
@@ -719,7 +701,7 @@ void loop() {
     // Serial.print("\t");
     // Serial.print(Dev_Res);
     //Serial.println("\t");
-	//Serial.print( Delta);
+    //Serial.print( Delta);
     Serial.println("\t");
 #endif
   }
@@ -741,12 +723,11 @@ void loop() {
     MenuUnit = Menu % 10;
     if (EditPar && !SavePar) contr.print("Mod ");
     if (SaveConf) contr.print("Save ");
-
     contr.print(&MenuVoice[MenuDec][MenuUnit][1]);  //Start printing lcd from second char to hide first Menu control char
     MenuOld = Menu;
-  } else if ( !EditMode && millis() > LcdUpd ) {     //Home Menu special handler for live update var every second
+  }
+  else if ( !EditMode && millis() > LcdUpd ) {    //Home Menu special handler for live update var every second
     contr.clear();
-
     contr.print("T:");
     contr.print(ActTemp);
     contr.print("/");
@@ -758,14 +739,16 @@ void loop() {
     contr.setCursor(15, 1);
     if (StartStop == 1) {
       contr.print("W");
-    } else {
+    }
+    else {
       contr.print("S");
     }
     contr.setCursor(0, 1);
     if (WeldCycle > 0) {
       contr.print("t:");
       contr.print(OpTime);
-    } else {
+    }
+    else {
       contr.print("o:");
       contr.print(OpTime);
     }
@@ -793,7 +776,8 @@ void loop() {
   if (ControllerEvent == CONTR_SCROLL && EditMode && !EditPar && !SaveConf ) {
     if (MenuVoice[MenuDec][MenuUnit][0] != 'h' && Pot == +1) { //scorre solo fino all'ultima voce del Menu
       Menu = Pot + Menu;
-    } else if (MenuUnit > 0 && Pot == -1) { //torna indietro ruotando la rotella solo però fino alla  prima voce
+    }
+    else if (MenuUnit > 0 && Pot == -1) { //torna indietro ruotando la rotella solo però fino alla  prima voce
       Menu = Pot + Menu;
     }
     Pot = 0;
@@ -882,7 +866,7 @@ void loop() {
   }
 
   if (EncClick && !SaveConf && MenuVoice[MenuDec][MenuUnit][0] == 'a') { //On MenuVoice=Exit goto Menu tilet`
-    contr.setCursor(0,1);
+    contr.setCursor(0, 1);
     contr.print("Are You Sure");
     SaveConf = 1;
     EncClick = 0;
