@@ -8,7 +8,7 @@
 //Debug
 #define SerilaPlot
 //#define F_Debug			//Uncomment to enable the "fast debug" use for event
-//#define S_Debug				//Uncomment to enable the schedule debug
+//#define S_Debug			//Uncomment to enable the schedule debug
 #define TDebug		1000
 
 //Parameter definition
@@ -52,23 +52,23 @@
 #define   M_MinT	8
 #define   M_MaxT	9
 #define   M_MaxT1	10
-#define   M_AutoOffTime	 11
-#define   M_AutoOffTime1 12
+#define   M_AutoOffTime	11
+#define   M_AutoOffTime1	12
 #define   M_WeldCurv	13
-#define   M_Target1    14
-#define   M_Target11  15
-#define   M_Time1     16
-#define   M_Target2    17
-#define   M_Target21  18
-#define   M_Time2     19
+#define   M_Target1		14
+#define   M_Target11	15
+#define   M_Time1		16
+#define   M_Target2		17
+#define   M_Target21	18
+#define   M_Time2		19
 
 
 
 //I2cController vars definition
-CtrlPanelLib contr(0x20); // Connect via i2c, default address #0 (A0-A2 not jumpered)
-#define POTDIVIDER 	4    // Encoder tick divider for sensibilty regulation
-#define CONTR_NOEVENT	0  // No event detected
-#define CONTR_SCROLL	1    // Encoder movement detected -Z > read Pot value
+CtrlPanelLib contr(0x20);	// Connect via i2c, default address #0 (A0-A2 not jumpered)
+#define POTDIVIDER		4	// Encoder tick divider for sensibilty regulation
+#define CONTR_NOEVENT	0	// No event detected
+#define CONTR_SCROLL	1	// Encoder movement detected -Z > read Pot value
 
 uint8_t ControllerEvent = CONTR_NOEVENT; //Store encoder events
 int TicPot = 0;           		//Used for cont of single step of rotary encoder
@@ -81,18 +81,19 @@ boolean InitPar = false;    		//Used by Menus
 boolean EncClick, P1, P2, P3; //P4, P5;
 
 //Pin definition
-#define ZEROCINTPIN 2 //Interrupt pin used by zero crossing detector circuit DO NOT CHANGE
-#define MCPINTPIN 	3 //Interrupt pin used by I2C controller (MCP23107)      DO NOT CHANGE
-//#define STARTSTOP	4
-#define SO		5 //MAX6675 signal serial out aka MISO on SPI
-#define CS		6 //MAX6675 signal Chip select
-#define SCK		7 //MAX6675 signal clock
-#define TILTSENSOR  8 //Tilt sensor for gun
-#define GATE		9 //TRIAC gate
-#define EMERG_RELAY 8 //Emergency and power relay
+#define ZEROCINTPIN 2	//Interrupt pin used by zero crossing detector circuit DO NOT CHANGE
+#define MCPINTPIN 	3	//Interrupt pin used by I2C controller (MCP23107)      DO NOT CHANGE
+#define SO			5	//MAX6675 signal serial out aka MISO on SPI
+#define CS			6	//MAX6675 signal Chip select
+#define SCK			7	//MAX6675 signal clock
+#define GATE		9 	//TRIAC gate
+#define EMERG_RELAY 8	//Emergency and power relay
 #define P_FAN_PWM	11  //Define pin D10 for pwm signal for gun
 #define _STARTSTOP	12  //Pin used for activation of hot air production (also used for magnetic sensor on gun)
 #define DEBUGLED	13  //Led used for debug purpose
+#define TILTSENSOR  A3	//Tilt sensor for gun
+#define FOOT_SWITCH A4	// Switch to anable the welding curve
+
 
 //PWM and timers vars
 #define PULSE	0x0F      //trigger pulse width (counts)
