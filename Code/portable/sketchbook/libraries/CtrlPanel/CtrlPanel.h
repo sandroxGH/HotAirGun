@@ -5,10 +5,12 @@
 #include "Print.h"
 
 //Panel configuration
-// Uncomment to enable the encoder configuration channel A and B on change state and C on falling
+// Uncomment to enable the encoder configuration channel A and B on change state and C on falling for encoder click 
+// Comment to enable 3 Led output Led1, Led2, Led3
 #define PANEL_CFG_ENC
 
-//In the B config th
+// Uncomment to enable the 5 Key Standard directional button
+// Comment to enable the Led4 and buzzer
 //#define PANEL_CFG_5Key
 
 // if DETECT_DEVICE is enabled, then when constructor's detectDevice != 0
@@ -19,11 +21,11 @@
 #define DETECT_DEVICE // enable device detection code
 
 // Standard directional button bits
-#define BUTTON_UP 0x08
-#define BUTTON_DOWN 0x04
-#define BUTTON_LEFT 0x10
-#define BUTTON_RIGHT 0x02
-#define BUTTON_SELECT 0x01
+#define BUTTON_UP		0x08
+#define BUTTON_DOWN		0x04
+#define BUTTON_LEFT		0x10
+#define BUTTON_RIGHT	0x02
+#define BUTTON_SELECT	0x01
 
 #define Led1 0
 #define Led2 1
